@@ -1,26 +1,66 @@
 require "set"
 require "keg"
 require "formula"
+require "os/mac/linkage_store"
 
 class LinkageChecker
-  attr_reader :keg, :formula
-  attr_reader :brewed_dylibs, :system_dylibs, :broken_dylibs, :variable_dylibs
-  attr_reader :undeclared_deps, :unnecessary_deps, :reverse_links
+  attr_reader :keg, :formula, :store
 
   def initialize(keg, formula = nil)
-    @keg = keg
+    @keg     = keg
     @formula = formula || resolve_formula(keg)
-    @brewed_dylibs = Hash.new { |h, k| h[k] = Set.new }
-    @system_dylibs = Set.new
-    @broken_dylibs = Set.new
-    @variable_dylibs = Set.new
-    @undeclared_deps = []
-    @reverse_links = Hash.new { |h, k| h[k] = Set.new }
-    @unnecessary_deps = []
-    check_dylibs
+    @store   = LinkageStore.new
+  end
+
+  # 'Hash type' cache values
+
+  def brewed_dylibs
+    @brewed_dylibs ||= store.fetch_hash_values!(
+      type: "brewed_dylibs", keys: [keg.name],
+    )
+  end
+
+  def reverse_links
+    @reverse_links ||= store.fetch_hash_values!(
+      type: "reverse_links", keys: [keg.name],
+    )
+  end
+
+  # 'Path-type' cached values
+
+  def system_dylibs
+    @system_dylibs ||= store.fetch_path_values!(
+      type: "system_dylibs", keys: [keg.name],
+    )
+  end
+
+  def broken_dylibs
+    @broken_dylibs ||= store.fetch_path_values!(
+      type: "broken_dylibs", keys: [keg.name],
+    )
+  end
+
+  def variable_dylibs
+    @variable_dylibs ||= store.fetch_path_values!(
+      type: "variable_dylibs", keys: [keg.name],
+    )
+  end
+
+  def undeclared_deps
+    @undeclareddeps ||= store.fetch_path_values!(
+      type: "undeclared_deps", keys: [keg.name],
+    )
+  end
+
+  def unnecessary_deps
+    @unnecessary_deps ||= store.fetch_path_values!(
+      type: "unnecessary_deps", keys: [keg.name],
+    )
   end
 
   def check_dylibs
+    reset_dylibs!
+
     @keg.find do |file|
       next if file.symlink? || file.directory?
       next unless file.dylib? || file.binary_executable? || file.mach_o_bundle?
@@ -53,6 +93,7 @@ class LinkageChecker
     end
 
     @undeclared_deps, @unnecessary_deps = check_undeclared_deps if formula
+    store_dylibs!
   end
 
   def check_undeclared_deps
@@ -86,12 +127,12 @@ class LinkageChecker
   end
 
   def display_normal_output
-    display_items "System libraries", @system_dylibs
-    display_items "Homebrew libraries", @brewed_dylibs
-    display_items "Variable-referenced libraries", @variable_dylibs
-    display_items "Missing libraries", @broken_dylibs
-    display_items "Undeclared dependencies with linkage", @undeclared_deps
-    display_items "Dependencies with no linkage", @unnecessary_deps
+    display_items "System libraries", system_dylibs
+    display_items "Homebrew libraries", brewed_dylibs
+    display_items "Variable-referenced libraries", variable_dylibs
+    display_items "Missing libraries", broken_dylibs
+    display_items "Undeclared dependencies with linkage", undeclared_deps
+    display_items "Dependencies with no linkage", unnecessary_deps
   end
 
   def display_reverse_output
@@ -160,5 +201,39 @@ class LinkageChecker
     Formulary.from_keg(keg)
   rescue FormulaUnavailableError
     opoo "Formula unavailable: #{keg.name}"
+  end
+
+  # Helper function to reset dylib values when building cache
+  #
+  # @return [nil]
+  def reset_dylibs!
+    @system_dylibs    = Set.new
+    @broken_dylibs    = Set.new
+    @variable_dylibs  = Set.new
+    @brewed_dylibs    = Hash.new { |h, k| h[k] = Set.new }
+    @reverse_links    = Hash.new { |h, k| h[k] = Set.new }
+    @undeclared_deps  = []
+    @unnecessary_deps = []
+    store.flush_cache_for_keys!(keys: [keg.name])
+  end
+
+  # Updates store with library values
+  #
+  # @return [nil]
+  def store_dylibs!
+    store.update!(
+      key: keg.name,
+      array_linkage_values: {
+        system_dylibs: @system_dylibs,
+        variable_dylibs: @variable_dylibs,
+        broken_dylibs: @broken_dylibs,
+        undeclared_deps: @undeclared_deps,
+        unnecessary_deps: @unnecessary_deps,
+      },
+      hash_linkage_values: {
+        brewed_dylibs: @brewed_dylibs,
+        reverse_links: @brewed_dylibs,
+      },
+    )
   end
 end

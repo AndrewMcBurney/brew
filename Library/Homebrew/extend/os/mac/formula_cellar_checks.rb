@@ -65,6 +65,7 @@ module FormulaCellarChecks
     return unless formula.prefix.directory?
     keg = Keg.new(formula.prefix)
     checker = LinkageChecker.new(keg, formula)
+    checker.check_dylibs
 
     return unless checker.broken_dylibs?
     output = <<~EOS
