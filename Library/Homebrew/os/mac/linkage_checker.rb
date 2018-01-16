@@ -8,16 +8,18 @@ class LinkageChecker
   attr_reader :undeclared_deps, :unnecessary_deps, :reverse_links
 
   def initialize(keg, formula = nil)
-    @keg = keg
-    @formula = formula || resolve_formula(keg)
-    @brewed_dylibs = Hash.new { |h, k| h[k] = Set.new }
-    @system_dylibs = Set.new
-    @broken_dylibs = Set.new
-    @variable_dylibs = Set.new
-    @undeclared_deps = []
-    @reverse_links = Hash.new { |h, k| h[k] = Set.new }
-    @unnecessary_deps = []
-    check_dylibs
+    Datadog.tracer.trace("brew.linkage.process_linkage") do
+      @keg = keg
+      @formula = formula || resolve_formula(keg)
+      @brewed_dylibs = Hash.new { |h, k| h[k] = Set.new }
+      @system_dylibs = Set.new
+      @broken_dylibs = Set.new
+      @variable_dylibs = Set.new
+      @undeclared_deps = []
+      @reverse_links = Hash.new { |h, k| h[k] = Set.new }
+      @unnecessary_deps = []
+      check_dylibs
+    end
   end
 
   def check_dylibs

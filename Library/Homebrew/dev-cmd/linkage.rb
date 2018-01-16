@@ -11,21 +11,45 @@
 #:    which link to it for each library the keg references.
 
 require "os/mac/linkage_checker"
+require "rubygems"
 
 module Homebrew
   module_function
 
+  # Hack to install dependencies
+  ENV["BUNDLE_GEMFILE"] = "#{HOMEBREW_LIBRARY_PATH}/test/Gemfile"
+  Homebrew.install_gem_setup_path! "bundler"
+  system "bundle", "install" unless quiet_system("bundle", "check")
+
+  require "ddtrace"
+
   def linkage
-    ARGV.kegs.each do |keg|
-      ohai "Checking #{keg.name} linkage" if ARGV.kegs.size > 1
-      result = LinkageChecker.new(keg)
-      if ARGV.include?("--test")
-        result.display_test_output
-        Homebrew.failed = true if result.broken_dylibs?
-      elsif ARGV.include?("--reverse")
-        result.display_reverse_output
-      else
-        result.display_normal_output
+    tracer = Datadog.tracer
+
+    # Hack for simulating a web server to DataDog
+    loop do
+      sleep 2
+
+      tracer.trace(
+        "brew.linkage",
+        service: "homebrew",
+        resource: "linkage-test:#{ARGV.include?("--test")}-reverse:#{ARGV.include?("--reverse")}",
+        tags: { "libraries" => ARGV.kegs.map(&:name).join(",") },
+      ) do
+        ARGV.kegs.each do |keg|
+          tracer.trace(keg.name, resource: keg.name) do
+            ohai "Checking #{keg.name} linkage" if ARGV.kegs.size > 1
+            result = LinkageChecker.new(keg)
+            if ARGV.include?("--test")
+              result.display_test_output
+              Homebrew.failed = true if result.broken_dylibs?
+            elsif ARGV.include?("--reverse")
+              result.display_reverse_output
+            else
+              result.display_normal_output
+            end
+          end
+        end
       end
     end
   end
