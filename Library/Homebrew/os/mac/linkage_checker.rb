@@ -23,40 +23,41 @@ class LinkageChecker
   end
 
   def check_dylibs
-    Datadog.tracer.trace("LinkageChecker#check_dylibs") do |span|
-      @keg.find do |file|
-        Thread.new do
-          next if file.symlink? || file.directory?
-          next unless file.dylib? || file.binary_executable? || file.mach_o_bundle?
+    Datadog.tracer.trace("LinkageChecker#check_dylibs") do
+      threads = []
 
-          # weakly loaded dylibs may not actually exist on disk, so skip them
-          # when checking for broken linkage
-          Datadog.tracer.trace("LinkageChecker#check_dylibs.for_each_library", service: "homebrew", child_of: span) do
-            file.dynamically_linked_libraries(except: :LC_LOAD_WEAK_DYLIB).each do |dylib|
-              @reverse_links[dylib] << file
-              if dylib.start_with? "@"
-                @variable_dylibs << dylib
+      @keg.find do |file|
+        next if file.symlink? || file.directory?
+        next unless file.dylib? || file.binary_executable? || file.mach_o_bundle?
+
+        # weakly loaded dylibs may not actually exist on disk, so skip them
+        # when checking for broken linkage
+        file.dynamically_linked_libraries(except: :LC_LOAD_WEAK_DYLIB).each do |dylib|
+          threads << Thread.new do # NOTE: threads
+            @reverse_links[dylib] << file
+            if dylib.start_with? "@"
+              @variable_dylibs << dylib
+            else
+              begin
+                owner = Keg.for Pathname.new(dylib)
+              rescue NotAKegError
+                @system_dylibs << dylib
+              rescue Errno::ENOENT
+                next if harmless_broken_link?(dylib)
+                @broken_dylibs << dylib
               else
-                begin
-                  owner = Keg.for Pathname.new(dylib)
-                rescue NotAKegError
-                  @system_dylibs << dylib
-                rescue Errno::ENOENT
-                  next if harmless_broken_link?(dylib)
-                  @broken_dylibs << dylib
+                tap = Tab.for_keg(owner).tap
+                f = if tap.nil? || tap.core_tap?
+                  owner.name
                 else
-                  tap = Tab.for_keg(owner).tap
-                  f = if tap.nil? || tap.core_tap?
-                    owner.name
-                  else
-                    "#{tap}/#{owner.name}"
-                  end
-                  @brewed_dylibs[f] << dylib
+                  "#{tap}/#{owner.name}"
                 end
+                @brewed_dylibs[f] << dylib
               end
             end
-          end
-        end.join
+          end # NOTE: threads
+        end
+        threads.map(&:join) # NOTE: threads
       end
 
       @undeclared_deps, @unnecessary_deps = check_undeclared_deps if formula

@@ -28,8 +28,6 @@ module Homebrew
 
     # Hack to get DataDog tracing on something that's not a web request
     2.times do
-      sleep 2
-
       tracer.trace(
         "Homebrew#linkage",
         service: "homebrew",
