@@ -26,18 +26,20 @@ module Homebrew
   def linkage
     tracer = Datadog.tracer
 
-    # Hack for simulating a web server to DataDog
-    loop do
+    # Hack to get DataDog tracing on something that's not a web request
+    2.times do
       sleep 2
 
       tracer.trace(
-        "brew.linkage",
+        "Homebrew#linkage",
         service: "homebrew",
-        resource: "linkage-test:#{ARGV.include?("--test")}-reverse:#{ARGV.include?("--reverse")}",
-        tags: { "libraries" => ARGV.kegs.map(&:name).join(",") },
+        resource: "linkage",
+        tags: { "libraries"  => ARGV.kegs.map(&:name).join(", "),
+                "--test"     => ARGV.include?("--test"),
+                "--reverse"  => ARGV.include?("--reverse") },
       ) do
         ARGV.kegs.each do |keg|
-          tracer.trace(keg.name, resource: keg.name) do
+          tracer.trace("package: #{keg.name}", resource: keg.name) do
             ohai "Checking #{keg.name} linkage" if ARGV.kegs.size > 1
             result = LinkageChecker.new(keg)
             if ARGV.include?("--test")

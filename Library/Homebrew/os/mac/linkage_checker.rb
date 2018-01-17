@@ -8,7 +8,7 @@ class LinkageChecker
   attr_reader :undeclared_deps, :unnecessary_deps, :reverse_links
 
   def initialize(keg, formula = nil)
-    Datadog.tracer.trace("brew.linkage.process_linkage") do
+    Datadog.tracer.trace("LinkageChecker#initialize") do
       @keg = keg
       @formula = formula || resolve_formula(keg)
       @brewed_dylibs = Hash.new { |h, k| h[k] = Set.new }
@@ -23,32 +23,36 @@ class LinkageChecker
   end
 
   def check_dylibs
-    @keg.find do |file|
-      next if file.symlink? || file.directory?
-      next unless file.dylib? || file.binary_executable? || file.mach_o_bundle?
+    Datadog.tracer.trace("LinkageChecker#check_dylibs") do
+      @keg.find do |file|
+        next if file.symlink? || file.directory?
+        next unless file.dylib? || file.binary_executable? || file.mach_o_bundle?
 
-      # weakly loaded dylibs may not actually exist on disk, so skip them
-      # when checking for broken linkage
-      file.dynamically_linked_libraries(except: :LC_LOAD_WEAK_DYLIB).each do |dylib|
-        @reverse_links[dylib] << file
-        if dylib.start_with? "@"
-          @variable_dylibs << dylib
-        else
-          begin
-            owner = Keg.for Pathname.new(dylib)
-          rescue NotAKegError
-            @system_dylibs << dylib
-          rescue Errno::ENOENT
-            next if harmless_broken_link?(dylib)
-            @broken_dylibs << dylib
-          else
-            tap = Tab.for_keg(owner).tap
-            f = if tap.nil? || tap.core_tap?
-              owner.name
+        # weakly loaded dylibs may not actually exist on disk, so skip them
+        # when checking for broken linkage
+        Datadog.tracer.trace("LinkageChecker#check_dylibs.for_each_library") do
+          file.dynamically_linked_libraries(except: :LC_LOAD_WEAK_DYLIB).each do |dylib|
+            @reverse_links[dylib] << file
+            if dylib.start_with? "@"
+              @variable_dylibs << dylib
             else
-              "#{tap}/#{owner.name}"
+              begin
+                owner = Keg.for Pathname.new(dylib)
+              rescue NotAKegError
+                @system_dylibs << dylib
+              rescue Errno::ENOENT
+                next if harmless_broken_link?(dylib)
+                @broken_dylibs << dylib
+              else
+                tap = Tab.for_keg(owner).tap
+                f = if tap.nil? || tap.core_tap?
+                  owner.name
+                else
+                  "#{tap}/#{owner.name}"
+                end
+                @brewed_dylibs[f] << dylib
+              end
             end
-            @brewed_dylibs[f] << dylib
           end
         end
       end
@@ -58,34 +62,36 @@ class LinkageChecker
   end
 
   def check_undeclared_deps
-    filter_out = proc do |dep|
-      next true if dep.build?
-      next false unless dep.optional? || dep.recommended?
-      formula.build.without?(dep)
-    end
-    declared_deps = formula.deps.reject { |dep| filter_out.call(dep) }.map(&:name)
-    declared_requirement_deps = formula.requirements.reject { |req| filter_out.call(req) }.map(&:default_formula).compact
-    declared_dep_names = (declared_deps + declared_requirement_deps).map { |dep| dep.split("/").last }
-    undeclared_deps = @brewed_dylibs.keys.reject do |full_name|
-      name = full_name.split("/").last
-      next true if name == formula.name
-      declared_dep_names.include?(name)
-    end
-    undeclared_deps.sort do |a, b|
-      if a.include?("/") && !b.include?("/")
-        1
-      elsif !a.include?("/") && b.include?("/")
-        -1
-      else
-        a <=> b
+    Datadog.tracer.trace("LinkageChecker#check_undeclared_deps") do
+      filter_out = proc do |dep|
+        next true if dep.build?
+        next false unless dep.optional? || dep.recommended?
+        formula.build.without?(dep)
       end
+      declared_deps = formula.deps.reject { |dep| filter_out.call(dep) }.map(&:name)
+      declared_requirement_deps = formula.requirements.reject { |req| filter_out.call(req) }.map(&:default_formula).compact
+      declared_dep_names = (declared_deps + declared_requirement_deps).map { |dep| dep.split("/").last }
+      undeclared_deps = @brewed_dylibs.keys.reject do |full_name|
+        name = full_name.split("/").last
+        next true if name == formula.name
+        declared_dep_names.include?(name)
+      end
+      undeclared_deps.sort do |a, b|
+        if a.include?("/") && !b.include?("/")
+          1
+        elsif !a.include?("/") && b.include?("/")
+          -1
+        else
+          a <=> b
+        end
+      end
+      unnecessary_deps = declared_dep_names.reject do |full_name|
+        name = full_name.split("/").last
+        next true if Formula[name].bin.directory?
+        @brewed_dylibs.keys.map { |x| x.split("/").last }.include?(name)
+      end
+      [undeclared_deps, unnecessary_deps]
     end
-    unnecessary_deps = declared_dep_names.reject do |full_name|
-      name = full_name.split("/").last
-      next true if Formula[name].bin.directory?
-      @brewed_dylibs.keys.map { |x| x.split("/").last }.include?(name)
-    end
-    [undeclared_deps, unnecessary_deps]
   end
 
   def display_normal_output
