@@ -14,13 +14,14 @@ class LinkageStore
   # @param  [Hash] array_linkage_values
   # @param  [Hash] hash_linkage_values
   # @return [nil]
-  def update!(
-        key:,
-        array_linkage_values: { system_dylibs: %w[], variable_dylibs: %w[],
-                                broken_dylibs: %w[], undeclared_deps: %w[],
-                                unnecessary_deps: %w[] },
-        hash_linkage_values: { brewed_dylibs: {}, reverse_links: {} }
-      )
+  def update!(key:,
+    array_linkage_values: {
+      system_dylibs: %w[], variable_dylibs: %w[], broken_dylibs: %w[],
+      undeclared_deps: %w[], unnecessary_deps: %w[]
+    },
+    hash_linkage_values: {
+      brewed_dylibs: {}, reverse_links: {}
+    })
     array_linkage_values.each do |type, table_values|
       insert_path_values(type, key, table_values)
     end
@@ -38,11 +39,11 @@ class LinkageStore
   # @param  [Array[String]] keys
   # @return [Array[String]]
   def fetch_path_values!(type:, keys:)
-    LinkageDatabase::db.execute(
+    LinkageDatabase.db.execute(
       <<~SQL
         SELECT path FROM linkage
           WHERE type = '#{type}'
-          AND name IN(#{LinkageDatabase::format_database_list(keys)});
+          AND name IN(#{LinkageDatabase.format_database_list(keys)});
       SQL
     ).flatten
   end
@@ -55,11 +56,11 @@ class LinkageStore
   # @return [Hash]
   def fetch_hash_values!(type:, keys:)
     hash = {}
-    LinkageDatabase::db.execute(
+    LinkageDatabase.db.execute(
       <<~SQL
         SELECT label, path FROM linkage
           WHERE type = '#{type}'
-          AND name IN(#{LinkageDatabase::format_database_list(keys)});
+          AND name IN(#{LinkageDatabase.format_database_list(keys)});
       SQL
     ).each { |row| (hash[row[0]] ||=[]) << row[1] }
     hash
@@ -71,10 +72,10 @@ class LinkageStore
   # @param  [Array[String]] keys
   # @return [nil]
   def flush_cache_for_keys!(keys:)
-    LinkageDatabase::db.execute(
+    LinkageDatabase.db.execute(
       <<~SQL
         DELETE FROM linkage
-          WHERE name IN(#{LinkageDatabase::format_database_list(keys)});
+          WHERE name IN(#{LinkageDatabase.format_database_list(keys)});
       SQL
     )
   end
@@ -84,7 +85,7 @@ class LinkageStore
   def insert_path_values(type, key, values)
     return if values.empty?
 
-    LinkageDatabase::db.execute(
+    LinkageDatabase.db.execute(
       <<~SQL
         INSERT INTO linkage (name, path, type)
           VALUES #{format_array_database_values(key, values, type)};
@@ -95,7 +96,7 @@ class LinkageStore
   def insert_hash_values(type, key, values, label)
     return if values.empty?
 
-    LinkageDatabase::db.execute(
+    LinkageDatabase.db.execute(
       <<~SQL
         INSERT INTO linkage (name, path, type, label)
           VALUES #{format_hash_database_values(key, values, type, label)};
