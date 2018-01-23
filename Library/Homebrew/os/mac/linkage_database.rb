@@ -100,6 +100,8 @@ module LinkageDatabase
 
   begin
     DatabaseInitializer.new.create_linkage_table
+  rescue SQLite3::CantOpenException => e
+    puts "Problem opening database file. Error: #{e}"
   rescue SQLite3::SQLException => e
     puts "Problem creating database tables for linkage database. Error: #{e}"
   end
