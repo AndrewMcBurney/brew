@@ -136,8 +136,8 @@ class LinkageChecker
   end
 
   def display_reverse_output
-    return if @reverse_links.empty?
-    sorted = @reverse_links.sort
+    return if reverse_links.empty?
+    sorted = reverse_links.sort
     sorted.each do |dylib, files|
       puts dylib
       files.each do |f|
@@ -149,21 +149,21 @@ class LinkageChecker
   end
 
   def display_test_output
-    display_items "Missing libraries", @broken_dylibs
-    display_items "Possible unnecessary dependencies", @unnecessary_deps
-    puts "No broken dylib links" if @broken_dylibs.empty?
+    display_items "Missing libraries", broken_dylibs
+    display_items "Possible unnecessary dependencies", unnecessary_deps
+    puts "No broken dylib links" if broken_dylibs.empty?
   end
 
   def broken_dylibs?
-    !@broken_dylibs.empty?
+    !broken_dylibs.empty?
   end
 
   def undeclared_deps?
-    !@undeclared_deps.empty?
+    !undeclared_deps.empty?
   end
 
   def unnecessary_deps?
-    !@unnecessary_deps.empty?
+    !unnecessary_deps.empty?
   end
 
   private
@@ -232,7 +232,7 @@ class LinkageChecker
       },
       hash_linkage_values: {
         brewed_dylibs: @brewed_dylibs,
-        reverse_links: @brewed_dylibs,
+        reverse_links: @reverse_links,
       },
     )
   end
