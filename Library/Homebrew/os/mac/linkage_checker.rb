@@ -9,53 +9,39 @@ class LinkageChecker
   def initialize(keg, formula = nil)
     @keg     = keg
     @formula = formula || resolve_formula(keg)
-    @store   = LinkageStore.new
+    @store   = LinkageStore.new(keg.name)
   end
 
-  # 'Hash type' cache values
+  # 'Hash-type' cache values
 
   def brewed_dylibs
-    @brewed_dylibs ||= store.fetch_hash_values!(
-      type: "brewed_dylibs", keys: [keg.name],
-    )
+    @brewed_dylibs ||= store.fetch_hash_values!(type: "brewed_dylibs")
   end
 
   def reverse_links
-    @reverse_links ||= store.fetch_hash_values!(
-      type: "reverse_links", keys: [keg.name],
-    )
+    @reverse_links ||= store.fetch_hash_values!(type: "reverse_links")
   end
 
   # 'Path-type' cached values
 
   def system_dylibs
-    @system_dylibs ||= store.fetch_path_values!(
-      type: "system_dylibs", keys: [keg.name],
-    )
+    @system_dylibs ||= store.fetch_path_values!(type: "system_dylibs")
   end
 
   def broken_dylibs
-    @broken_dylibs ||= store.fetch_path_values!(
-      type: "broken_dylibs", keys: [keg.name],
-    )
+    @broken_dylibs ||= store.fetch_path_values!(type: "broken_dylibs")
   end
 
   def variable_dylibs
-    @variable_dylibs ||= store.fetch_path_values!(
-      type: "variable_dylibs", keys: [keg.name],
-    )
+    @variable_dylibs ||= store.fetch_path_values!(type: "variable_dylibs")
   end
 
   def undeclared_deps
-    @undeclareddeps ||= store.fetch_path_values!(
-      type: "undeclared_deps", keys: [keg.name],
-    )
+    @undeclareddeps ||= store.fetch_path_values!(type: "undeclared_deps")
   end
 
   def unnecessary_deps
-    @unnecessary_deps ||= store.fetch_path_values!(
-      type: "unnecessary_deps", keys: [keg.name],
-    )
+    @unnecessary_deps ||= store.fetch_path_values!(type: "unnecessary_deps")
   end
 
   def check_dylibs
@@ -207,6 +193,7 @@ class LinkageChecker
   #
   # @return [nil]
   def reset_dylibs!
+    store.flush_cache!
     @system_dylibs    = Set.new
     @broken_dylibs    = Set.new
     @variable_dylibs  = Set.new
@@ -214,23 +201,21 @@ class LinkageChecker
     @reverse_links    = Hash.new { |h, k| h[k] = Set.new }
     @undeclared_deps  = []
     @unnecessary_deps = []
-    store.flush_cache_for_keys!(keys: [keg.name])
   end
 
-  # Updates store with library values
+  # Updates data store with package path values
   #
   # @return [nil]
   def store_dylibs!
     store.update!(
-      key: keg.name,
-      array_linkage_values: {
+      path_values: {
         system_dylibs: @system_dylibs,
         variable_dylibs: @variable_dylibs,
         broken_dylibs: @broken_dylibs,
         undeclared_deps: @undeclared_deps,
         unnecessary_deps: @unnecessary_deps,
       },
-      hash_linkage_values: {
+      hash_values: {
         brewed_dylibs: @brewed_dylibs,
         reverse_links: @reverse_links,
       },

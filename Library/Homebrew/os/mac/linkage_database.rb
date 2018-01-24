@@ -1,5 +1,5 @@
 #
-# LinkageDatabase is a module to interface with the sqlite3 database
+# LinkageDatabase is a module to interface with the SQLite3 database
 #
 # Database schema:
 #
@@ -13,8 +13,6 @@
 # );
 #
 module LinkageDatabase
-  module_function
-
   # Install and require SQLite3 ruby gem for caching purposes
   Homebrew.install_gem_setup_path! "sqlite3"
   require "sqlite3"
@@ -40,12 +38,14 @@ module LinkageDatabase
   # the linkage table if it does not exist
   #
   class DatabaseInitializer
+    include LinkageDatabase
+
     # Creates database table for SQLite3 linkage caching mechanism, if the
     # table 'linkage' does not exist
     #
     # @return [nil]
     def create_linkage_table
-      LinkageDatabase.db.execute <<~SQL
+      db.execute <<~SQL
         CREATE TABLE IF NOT EXISTS linkage (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL,
@@ -60,11 +60,21 @@ module LinkageDatabase
     private
 
     def all_types
-      LinkageDatabase.format_database_list(GENERALIZED_TYPES + HASH_LINKAGE_TYPES)
+      format_database_list(GENERALIZED_TYPES + HASH_LINKAGE_TYPES)
     end
 
     def hash_types
-      LinkageDatabase.format_database_list(HASH_LINKAGE_TYPES)
+      format_database_list(HASH_LINKAGE_TYPES)
+    end
+
+    # Takes in an array of strings, and formats them into a SQL list string
+    #
+    # @param  [Array[String]] list
+    # @return [String]
+    def format_database_list(list)
+      list
+        .map { |value| "'#{value}'" }
+        .join(", ")
     end
   end
 
@@ -73,29 +83,6 @@ module LinkageDatabase
   # @return [SQLite3::Database] db
   def db
     @db ||= SQLite3::Database.new "#{HOMEBREW_CACHE}/linkage.db"
-  end
-
-  # Checks if the database has been initialized
-  #
-  # @return [Boolean]
-  def empty?(keys:)
-    db.execute(
-      <<~SQL
-        SELECT COUNT(*) FROM linkage
-          WHERE name IN(#{format_database_list(keys)});
-      SQL
-    ) .flatten[0]
-      .zero?
-  end
-
-  # Takes in an array of strings, and formats them into a SQL list string
-  #
-  # @param  [Array[String]] list
-  # @return [String]
-  def format_database_list(list)
-    list
-      .map { |value| "'#{value}'" }
-      .join(", ")
   end
 
   begin

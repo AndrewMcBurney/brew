@@ -14,21 +14,18 @@
 #:    forces a check on the dylibs
 
 require "os/mac/linkage_checker"
-require "os/mac/linkage_database"
 
 module Homebrew
   module_function
 
   def linkage
-    check = LinkageDatabase.empty?(keys: ARGV.kegs.map(&:name))
-
     ARGV.kegs.each do |keg|
       ohai "Checking #{keg.name} linkage" if ARGV.kegs.size > 1
       result = LinkageChecker.new(keg)
 
       # Force a flush of the 'cache' and check dylibs if the `--rebuild`
       # flag is passed
-      result.check_dylibs if check || ARGV.include?("--rebuild")
+      result.check_dylibs if ARGV.include?("--rebuild")
 
       if ARGV.include?("--test")
         result.display_test_output
