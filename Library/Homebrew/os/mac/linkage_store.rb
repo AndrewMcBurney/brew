@@ -58,7 +58,8 @@ class LinkageStore
   # @param  [String] type
   # @return [Hash]
   def fetch_hash_values!(type:)
-    db.transaction { db[key][type.to_sym] }
+    data db.transaction { db[key][type.to_sym] }
+    data == nil ? {} : data.reduce({}, :update)
   end
 
   # Flushes the cache for the given 'key' name
