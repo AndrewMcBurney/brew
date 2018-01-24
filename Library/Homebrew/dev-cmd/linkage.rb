@@ -14,27 +14,55 @@
 #:    forces a check on the dylibs
 
 require "os/mac/linkage_checker"
-require "os/mac/linkage_database"
+require "rubygems"
 
 module Homebrew
   module_function
 
+  # Hack to install dependencies
+  ENV["BUNDLE_GEMFILE"] = "#{HOMEBREW_LIBRARY_PATH}/test/Gemfile"
+  Homebrew.install_gem_setup_path! "bundler"
+  system "bundle", "install" unless quiet_system("bundle", "check")
+
+  require "ddtrace"
+
   def linkage
-    ARGV.kegs.each do |keg|
-      ohai "Checking #{keg.name} linkage" if ARGV.kegs.size > 1
-      result = LinkageChecker.new(keg)
+    tracer = Datadog.tracer
 
-      # Force a flush of the 'cache' and check dylibs if the `--rebuild`
-      # flag is passed
-      result.check_dylibs if ARGV.include?("--rebuild")
+    # Hack to get DataDog tracing on something that's not a web request
+    2.times do
+      tracer.trace(
+        "Homebrew#linkage",
+        service: "homebrew",
+        resource: "linkage",
+        tags: {
+          "libraries"  => ARGV.kegs.map(&:name).join(", "),
+          "num_libraries" => ARGV.kegs.size,
+          "--test"     => ARGV.include?("--test"),
+          "--reverse"  => ARGV.include?("--reverse"),
+          "--rebuild"  => ARGV.include?("--rebuild"),
+        },
+      ) do
+        ARGV.kegs.each do |keg|
+          tracer.trace("package: #{keg.name}", resource: keg.name) do
+            ohai "Checking #{keg.name} linkage" if ARGV.kegs.size > 1
 
-      if ARGV.include?("--test")
-        result.display_test_output
-        Homebrew.failed = true if result.broken_dylibs?
-      elsif ARGV.include?("--reverse")
-        result.display_reverse_output
-      else
-        result.display_normal_output
+            result = LinkageChecker.new(keg)
+
+            # Force a flush of the 'cache' and check dylibs if the `--rebuild`
+            # flag is passed
+            result.check_dylibs if ARGV.include?("--rebuild")
+
+            if ARGV.include?("--test")
+              result.display_test_output
+              Homebrew.failed = true if result.broken_dylibs?
+            elsif ARGV.include?("--reverse")
+              result.display_reverse_output
+            else
+              result.display_normal_output
+            end
+          end
+        end
       end
     end
   end

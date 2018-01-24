@@ -35,12 +35,14 @@ class LinkageStore
       brewed_dylibs: {}, reverse_links: {}
     }
   )
-    db.transaction do
-      db[key] = {
-        path_values: path_values,
-        brewed_dylibs: format_hash_values(hash_values[:brewed_dylibs]),
-        reverse_links: format_hash_values(hash_values[:reverse_links]),
-      }
+    Datadog.tracer.trace("LinkageChecker#update", service: "homebrew", resource: "linkage") do
+      db.transaction do
+        db[key] = {
+          path_values: path_values,
+          brewed_dylibs: format_hash_values(hash_values[:brewed_dylibs]),
+          reverse_links: format_hash_values(hash_values[:reverse_links]),
+        }
+      end
     end
   end
 
@@ -49,7 +51,9 @@ class LinkageStore
   # @param  [String] type
   # @return [Array[String]]
   def fetch_path_values!(type:)
-    db.transaction { db[key][:path_values][type.to_sym] }
+    Datadog.tracer.trace("LinkageChecker#fetch_path_values!", service: "homebrew", resource: "linkage") do
+      db.transaction { db[key][:path_values][type.to_sym] }
+    end
   end
 
   # Fetches path and label values from a table name given an array of keys and
@@ -58,14 +62,19 @@ class LinkageStore
   # @param  [String] type
   # @return [Hash]
   def fetch_hash_values!(type:)
-    db.transaction { db[key][type.to_sym] }
+    Datadog.tracer.trace("LinkageChecker#fetch_hash_values!", service: "homebrew", resource: "linkage") do
+      data = db.transaction { db[key][type.to_sym] }
+      data == nil ? {} : data.reduce({}, :update)
+    end
   end
 
   # Flushes the cache for the given 'key' name
   #
   # @return [nil]
   def flush_cache!
-    db.transaction { db.delete(key) }
+    Datadog.tracer.trace("LinkageChecker#flush_cache!", service: "homebrew", resource: "linkage") do
+      data = db.transaction { db.delete(key) }
+    end
   end
 
   private
@@ -78,6 +87,8 @@ class LinkageStore
   # @param  [Hash] hash
   # @return [Hash]
   def format_hash_values(hash)
-    hash.empty? ? nil : hash.map { |k, v| { k => v.to_a } }
+    Datadog.tracer.trace("LinkageChecker#format_hash_values", service: "homebrew", resource: "linkage") do
+      hash.empty? ? nil : hash.map { |k, v| { k => v.to_a } }
+    end
   end
 end
