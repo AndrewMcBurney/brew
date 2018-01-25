@@ -6,9 +6,8 @@ require "sqlite3"
 # `Database` is an abstract base class representing a database caching schema
 # residing in the Homebrew cache
 #
-# It uses the template design pattern by asking concretions to override the
-# pure-virtual `create_tables` method, where a concrete class may specify the
-# schema for the given database
+# It asks concretions to override the pure-virtual `create_tables` method, where
+# a concrete class may specify the schema for the given database
 #
 # @abstract
 #
@@ -21,6 +20,7 @@ class Database
   # Creates a database in the Homebrew cache with the name passed in
   #
   # @param  [String] name
+  # @raise  [SQLite3::CantOpenException]
   # @return [nil]
   def initialize(name)
     @name = name
@@ -32,7 +32,8 @@ class Database
     end
   end
 
-  # Memoized `SQLite3` database object located in the `HOMEBREW_CACHE`
+  # Memoized `SQLite3` database object with on-disk database located in the
+  # `HOMEBREW_CACHE`
   #
   # @return [SQLite3::Database] db
   def db

@@ -50,7 +50,7 @@ class LinkageStore < Store
   # Fetches cached values in persistent storage according to the type of data
   # stored
   #
-  # @param  [Hash] values
+  # @param  [String] type
   # @return [Any]
   def fetch(type:)
     if HASH_LINKAGE_TYPES.include?(type)
@@ -60,11 +60,11 @@ class LinkageStore < Store
     end
   end
 
-  # A condition for where to flush the cache
+  # A condition for where to flush the cache (i.e., where to delete rows)
   #
   # @return [String]
   def flush_condition
-    "name = '#{key}';"
+    "name = '#{key}'"
   end
 
   private

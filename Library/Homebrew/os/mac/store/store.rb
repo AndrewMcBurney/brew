@@ -30,7 +30,7 @@ class Store
   # stored
   #
   # @abstract
-  # @param  [Hash] values
+  # @param  [Any]
   # @return [nil]
   def update!(*)
     raise NotImplementedError
@@ -40,7 +40,7 @@ class Store
   # stored
   #
   # @abstract
-  # @param  [Hash] values
+  # @param  [Any]
   # @return [Any]
   def fetch(*)
     raise NotImplementedError
@@ -49,6 +49,9 @@ class Store
   # A condition to specify what rows to delete when flushing the cache. This
   # method should be overridden by concrete classes extending abstract
   # `Database` class
+  #
+  # You may think of it as the `template` method in the template design pattern,
+  # where the `flush_cache!` method is the algorithm being templated
   #
   # @abstract
   # @return [String]
