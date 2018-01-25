@@ -1,17 +1,33 @@
-require "os/mac/linkage_database"
+require "os/mac/database/database"
+require "os/mac/database/helpers/linkage_database_types"
 
 #
-# DatabaseInitializer initializes the database by creating the linkage table if
-# it does not exist
+# Database schema:
 #
-class DatabaseInitializer
-  include LinkageDatabase
+# CREATE TABLE IF NOT EXISTS linkage (
+#   id INTEGER PRIMARY KEY AUTOINCREMENT,
+#   name TEXT NOT NULL,
+#   path TEXT NOT NULL,
+#   type TEXT NOT NULL CHECK (type IN (#{types})),
+#   label TEXT CHECK (label IS NULL OR (type IN (#{hash_types}))),
+#   UNIQUE(name, path, type, label) ON CONFLICT IGNORE
+# );
+#
+class LinkageDatabase < Database
+  include LinkageDatabaseTypes
+
+  # Initializes new `LinkageDatabase` class
+  #
+  # @return [nil]
+  def initialize
+    super("linkage")
+  end
 
   # Creates database table for SQLite3 linkage caching mechanism, if the
   # table 'linkage' does not exist
   #
   # @return [nil]
-  def create_linkage_table
+  def create_tables
     db.execute <<~SQL
       CREATE TABLE IF NOT EXISTS linkage (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,15 +54,5 @@ class DatabaseInitializer
   # @return [String]
   def hash_types
     format_database_list(HASH_LINKAGE_TYPES)
-  end
-
-  # Takes in an array of strings, and formats them into a SQL list string
-  #
-  # @param  [Array[String]] list
-  # @return [String]
-  def format_database_list(list)
-    list
-      .map { |value| "'#{value}'" }
-      .join(", ")
   end
 end
