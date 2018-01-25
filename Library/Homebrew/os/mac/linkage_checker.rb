@@ -1,7 +1,7 @@
 require "set"
 require "keg"
 require "formula"
-require "os/mac/linkage_store"
+require "os/mac/store/linkage_store"
 
 class LinkageChecker
   attr_reader :keg, :formula, :store
@@ -15,33 +15,33 @@ class LinkageChecker
   # 'Hash-type' cache values
 
   def brewed_dylibs
-    @brewed_dylibs ||= store.fetch_hash_values!(type: "brewed_dylibs")
+    @brewed_dylibs ||= store.fetch(type: "brewed_dylibs")
   end
 
   def reverse_links
-    @reverse_links ||= store.fetch_hash_values!(type: "reverse_links")
+    @reverse_links ||= store.fetch(type: "reverse_links")
   end
 
   # 'Path-type' cached values
 
   def system_dylibs
-    @system_dylibs ||= store.fetch_path_values!(type: "system_dylibs")
+    @system_dylibs ||= store.fetch(type: "system_dylibs")
   end
 
   def broken_dylibs
-    @broken_dylibs ||= store.fetch_path_values!(type: "broken_dylibs")
+    @broken_dylibs ||= store.fetch(type: "broken_dylibs")
   end
 
   def variable_dylibs
-    @variable_dylibs ||= store.fetch_path_values!(type: "variable_dylibs")
+    @variable_dylibs ||= store.fetch(type: "variable_dylibs")
   end
 
   def undeclared_deps
-    @undeclareddeps ||= store.fetch_path_values!(type: "undeclared_deps")
+    @undeclareddeps ||= store.fetch(type: "undeclared_deps")
   end
 
   def unnecessary_deps
-    @unnecessary_deps ||= store.fetch_path_values!(type: "unnecessary_deps")
+    @unnecessary_deps ||= store.fetch(type: "unnecessary_deps")
   end
 
   def check_dylibs

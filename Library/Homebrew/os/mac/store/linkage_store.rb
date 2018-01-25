@@ -1,27 +1,32 @@
+require "os/mac/store/store"
+require "os/mac/database/linkage_database"
+require "os/mac/database/helpers/linkage_database_types"
+
 #
-# LinkageStore is a class which acts as an interface to a persistent storage
+# `LinkageStore` is a class which acts as an interface to a persistent storage
 # mechanism
 #
-# If the cache hasn't changed, don't do extra processing in LinkageChecker.
+# If the cache hasn't changed, don't do extra processing in `LinkageChecker`.
 # Instead, just fetch the data stored in the cache
 #
+class LinkageStore < Store
+  include LinkageDatabaseTypes
 
-require "os/mac/linkage_database"
-
-class LinkageStore
-  include LinkageDatabase
-
+  # @key is the keg name for the `LinkageStore` class
+  #
+  # @return [String]
   attr_reader :key
 
-  # Initializes new LinkageStore class
+  # Initializes new `LinkageStore` class
   #
   # @param  [String] keg_name
   # @return [nil]
   def initialize(keg_name)
     @key = keg_name
+    super(LinkageDatabase.new)
   end
 
-  # Updates cached values in pstore according to the type of data stored
+  # Updates cached values in the persistent store according to the type of data
   #
   # @param  [Hash] path_values
   # @param  [Hash] hash_values
@@ -42,11 +47,33 @@ class LinkageStore
     end
   end
 
+  # Fetches cached values in persistent storage according to the type of data
+  # stored
+  #
+  # @param  [Hash] values
+  # @return [Any]
+  def fetch(type:)
+    if HASH_LINKAGE_TYPES.include?(type)
+      fetch_hash_values(type: type)
+    else
+      fetch_path_values(type: type)
+    end
+  end
+
+  # A condition for where to flush the cache
+  #
+  # @return [String]
+  def flush_condition
+    "name = '#{key}';"
+  end
+
+  private
+
   # Fetches a subset of paths where the name = `key`
   #
   # @param  [String] type
   # @return [Array[String]]
-  def fetch_path_values!(type:)
+  def fetch_path_values(type:)
     db.execute(
       <<~SQL
         SELECT path FROM linkage
@@ -57,11 +84,11 @@ class LinkageStore
   end
 
   # Fetches a subset of paths and labels where the name = `key`. Formats said
-  # paths/labels into `key => [value]` syntax expected by LinkageChecker
+  # paths/labels into `key => [value]` syntax expected by `LinkageChecker`
   #
   # @param  [String] type
   # @return [Hash]
-  def fetch_hash_values!(type:)
+  def fetch_hash_values(type:)
     hash = {}
     db.execute(
       <<~SQL
@@ -73,21 +100,7 @@ class LinkageStore
     hash
   end
 
-  # Deletes rows where the 'name' attribute matches the `key`
-  #
-  # @return [nil]
-  def flush_cache!
-    db.execute(
-      <<~SQL
-        DELETE FROM linkage
-          WHERE name = '#{key}';
-      SQL
-    )
-  end
-
-  private
-
-  # Inserts values into the database
+  # Inserts values into the persistent store
   #
   # @param  [String]        type
   # @param  [Array[String]] values
