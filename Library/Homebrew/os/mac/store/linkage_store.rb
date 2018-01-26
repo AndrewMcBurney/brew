@@ -12,11 +12,6 @@ require "os/mac/database/helpers/linkage_database_types"
 class LinkageStore < Store
   include LinkageDatabaseTypes
 
-  # @key is the keg name for the `LinkageStore` class
-  #
-  # @return [String]
-  attr_reader :key
-
   # Initializes new `LinkageStore` class
   #
   # @param  [String] keg_name
@@ -68,6 +63,11 @@ class LinkageStore < Store
   end
 
   private
+
+  # @key is the keg name for the `LinkageStore` class
+  #
+  # @return [String]
+  attr_reader :key
 
   # Fetches a subset of paths where the name = `key`
   #

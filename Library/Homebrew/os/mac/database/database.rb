@@ -49,7 +49,7 @@ class Database
     raise NotImplementedError
   end
 
-  private
+  protected
 
   # Takes in an array of strings, and formats them into a SQL list string
   #
