@@ -5,6 +5,8 @@
 #:
 #:    Use `--recursive` to resolve more than one level of dependencies.
 #:
+#:    Use `--rebuild` to flush cache for formulae passed in
+#:
 #:    If `--installed` is passed, only list installed formulae.
 #:
 #:    By default, `uses` shows all formulae that specify <formulae> as a required
@@ -17,6 +19,8 @@
 #:    `--devel` or `--HEAD`.
 
 require "formula"
+require "os/mac/formula_checker/recursive_checker"
+require "os/mac/formula_checker/non_recursive_checker"
 
 # `brew uses foo bar` returns formulae that use both foo and bar
 # If you want the union, run the command twice and concatenate the results.
@@ -29,6 +33,7 @@ module Homebrew
     raise FormulaUnspecifiedError if ARGV.named.empty?
 
     used_formulae_missing = false
+
     used_formulae = begin
       ARGV.formulae
     rescue FormulaUnavailableError => e
@@ -38,92 +43,24 @@ module Homebrew
       ARGV.named.map { |name| OpenStruct.new name: name, full_name: name }
     end
 
+    checker  = ARGV.flag?("--recursive") ? RecursiveChecker : NonRecursiveChecker
     formulae = ARGV.include?("--installed") ? Formula.installed : Formula
-    recursive = ARGV.flag? "--recursive"
+    cached   = !ARGV.include?("--rebuild")
+
     includes = []
     ignores = []
-    if ARGV.include? "--include-build"
-      includes << "build?"
-    else
-      ignores << "build?"
-    end
-    if ARGV.include? "--include-optional"
-      includes << "optional?"
-    else
-      ignores << "optional?"
-    end
+
+    ARGV.include?("--include-build")    ? includes << "build?" : ignores << "build?"
+    ARGV.include?("--include-optional") ? includes << "optional?" : ignores << "optional?"
+
     ignores << "recommended?" if ARGV.include? "--skip-recommended"
 
-    uses = formulae.select do |f|
-      used_formulae.all? do |ff|
-        begin
-          if recursive
-            deps = f.recursive_dependencies do |dependent, dep|
-              if dep.recommended?
-                Dependency.prune if ignores.include?("recommended?") || dependent.build.without?(dep)
-              elsif dep.optional?
-                Dependency.prune if !includes.include?("optional?") && !dependent.build.with?(dep)
-              elsif dep.build?
-                Dependency.prune unless includes.include?("build?")
-              end
-
-              # If a tap isn't installed, we can't find the dependencies of one
-              # its formulae, and an exception will be thrown if we try.
-              if dep.is_a?(TapDependency) && !dep.tap.installed?
-                Dependency.keep_but_prune_recursive_deps
-              end
-            end
-
-            dep_formulae = deps.flat_map do |dep|
-              begin
-                dep.to_formula
-              rescue
-                []
-              end
-            end
-
-            reqs_by_formula = ([f] + dep_formulae).flat_map do |formula|
-              formula.requirements.map { |req| [formula, req] }
-            end
-
-            reqs_by_formula.reject! do |dependent, req|
-              if req.recommended?
-                ignores.include?("recommended?") || dependent.build.without?(req)
-              elsif req.optional?
-                !includes.include?("optional?") && !dependent.build.with?(req)
-              elsif req.build?
-                !includes.include?("build?")
-              end
-            end
-
-            reqs = reqs_by_formula.map(&:last)
-          else
-            deps = f.deps.reject do |dep|
-              ignores.any? { |ignore| dep.send(ignore) } && includes.none? { |include| dep.send(include) }
-            end
-            reqs = f.requirements.reject do |req|
-              ignores.any? { |ignore| req.send(ignore) } && includes.none? { |include| req.send(include) }
-            end
-          end
-          next true if deps.any? do |dep|
-            begin
-              dep.to_formula.full_name == ff.full_name
-            rescue
-              dep.name == ff.name
-            end
-          end
-
-          reqs.any? { |req| req.name == ff.name }
-        rescue FormulaUnavailableError
-          # Silently ignore this case as we don't care about things used in
-          # taps that aren't currently tapped.
-          next
-        end
-      end
+    uses = used_formulae.map do |formula|
+      checker.new(formula, formulae, ignores, includes, cached).check_uses!
     end
 
     return if uses.empty?
-    puts Formatter.columns(uses.map(&:full_name).sort)
+    puts Formatter.columns(uses.sort)
     odie "Missing formulae should not have dependents!" if used_formulae_missing
   end
 end
